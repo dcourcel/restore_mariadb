@@ -36,7 +36,9 @@ if [ -n "$1" ]; then
     MYSQL_HOST="$1"
     MYSQL_USER="$2"
     MYSQL_PASSWD_FILE="$3"
-    ARCHIVE_NAME="$4"
+    BACKUP_FOLDER="$4"
+    ARCHIVE_NAME="$5"
+    DATE_DIR_FILE="$6"
 fi
 
 # Verify if arguments exist
@@ -53,28 +55,54 @@ if [ ! -f "$MYSQL_PASSWD_FILE" ]; then
     echo 'Error. No password file specified or the file doesn'\''t exist.'
     ERR=1
 fi
-if [ ! -e "$ARCHIVE_NAME" ]; then
-    echo 'Error. No archive name specified or the file doesn'\''t exist.'
+if [ -z "$BACKUP_FOLDER" ]; then
+    echo '$BACKUP_FOLDER' is not defined
     ERR=1
+fi;
+if [ -n "$DATE_DIR_FILE" ]; then
+    if [ ! -f "$DATE_DIR_FILE" ]; then
+        echo "\$DATE_DIR_FILE ($DATE_DIR_FILE) is not a file."
+        ERR=1
+    else
+        date_dir=$(head -n 1 $DATE_DIR_FILE)
+        if [ -z "$date_dir" ]; then
+            echo "The file $DATE_DIR_FILE is empty."
+            ERR=1
+        fi
+    fi
+else
+    echo "\$DATE_DIR_FILE is not defined."
+    ERR=1
+fi;
+BACKUP_FILE=/media/backup/$BACKUP_FOLDER/$date_dir/$ARCHIVE_NAME
+if [ $ERR -eq 0 ]; then
+    if [ -z "$ARCHIVE_NAME" ]; then
+        echo "\$ARCHIVE_NAME is empty."
+        ERR=1
+    elif [ ! -f "$BACKUP_FILE" ]; then
+        echo "The file $BACKUP_FILE doesn't exist."
+        ERR=1
+    fi
 fi
 
-if [ $ERR = 1 ]; then
+if [ $ERR -eq 1 ]; then
      exit 1
 fi;
+
 
 echo '----------------------------------------'
 echo 'Begin Database restoration.'
 
 # Extract the archive and execute it with mysql.
-bzip2 -cd "$ARCHIVE_NAME" | mysql "-h$MYSQL_HOST" "-u$MYSQL_USER" "-p$(cat $MYSQL_PASSWD_FILE)" &
+bzip2 -cd "$BACKUP_FILE" | mysql "-h$MYSQL_HOST" "-u$MYSQL_USER" "-p$(cat $MYSQL_PASSWD_FILE)" &
 wait $!
 
 
 ERR_CODE="$?"
 if [ $ERR_CODE -eq 0 ]; then
     if [ -n "$DELETE_ARCHIVE" ]; then
-        echo "Delete file $ARCHIVE_NAME"
-        rm -f "$ARCHIVE_NAME"
+        echo "Delete file $BACKUP_FILE"
+        rm -f "$BACKUP_FILE"
     fi
     echo 'Database restoration completed.'
 else
